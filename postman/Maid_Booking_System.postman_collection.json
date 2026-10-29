@@ -1,0 +1,119 @@
+{
+  "info": {
+    "_postman_id": "9a7b4f12-3c8e-48a2-b910-rupeek2026sde3",
+    "name": "Rupeek SDE-3 Maid Booking System API",
+    "description": "End-to-end Postman Collection for onboarding maids, discovering available slots, creating Instant/Scheduled/Recurring bookings, processing idempotent payments, and testing single-occurrence & full cancellations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "maidId", "value": "" },
+    { "key": "bookingId", "value": "" },
+    { "key": "occurrenceId", "value": "" },
+    { "key": "customerId", "value": "11111111-2222-3333-4444-555555555555" }
+  ],
+  "item": [
+    {
+      "name": "1. Onboard Maid (Lakshmi Devi - Indiranagar)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201 Created', function () { pm.response.to.have.status(201); });",
+              "var json = pm.response.json();",
+              "pm.collectionVariables.set('maidId', json.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/v1/maids", "host": ["{{baseUrl}}"], "path": ["api", "v1", "maids"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Lakshmi Devi\",\n  \"gender\": \"FEMALE\",\n  \"locality\": \"Indiranagar\",\n  \"city\": \"Bengaluru\",\n  \"pincode\": \"560038\",\n  \"latitude\": 12.9784,\n  \"longitude\": 77.6408,\n  \"skills\": [\"CLEANING\", \"COOKING\", \"DISHWASHING\"],\n  \"baseHourlyRate\": 250.00,\n  \"rating\": 4.8,\n  \"availabilityWindows\": [\n    { \"dayOfWeek\": \"MONDAY\", \"startTime\": \"08:00:00\", \"endTime\": \"20:00:00\" },\n    { \"dayOfWeek\": \"WEDNESDAY\", \"startTime\": \"08:00:00\", \"endTime\": \"20:00:00\" },\n    { \"dayOfWeek\": \"FRIDAY\", \"startTime\": \"08:00:00\", \"endTime\": \"20:00:00\" }\n  ]\n}"
+        }
+      }
+    },
+    {
+      "name": "2. Discover Available Maids (Multi-Filter Search)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/v1/maids/search", "host": ["{{baseUrl}}"], "path": ["api", "v1", "maids", "search"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"locality\": \"Indiranagar\",\n  \"requiredSkill\": \"COOKING\",\n  \"startTime\": \"2026-11-02T09:00:00\",\n  \"endTime\": \"2026-11-02T11:00:00\",\n  \"minRating\": 4.5,\n  \"maxHourlyRate\": 300.00,\n  \"genderPreference\": \"FEMALE\"\n}"
+        }
+      }
+    },
+    {
+      "name": "3. Create Recurring Booking (Mon/Wed/Fri 9AM-11AM)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201 Created', function () { pm.response.to.have.status(201); });",
+              "var json = pm.response.json();",
+              "pm.collectionVariables.set('bookingId', json.bookingId);",
+              "pm.collectionVariables.set('occurrenceId', json.occurrences[1].occurrenceId);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/v1/bookings", "host": ["{{baseUrl}}"], "path": ["api", "v1", "bookings"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"maidId\": \"{{maidId}}\",\n  \"serviceSkill\": \"COOKING\",\n  \"bookingType\": \"RECURRING\",\n  \"recurrencePattern\": {\n    \"daysOfWeek\": [\"MONDAY\", \"WEDNESDAY\", \"FRIDAY\"],\n    \"slotStartTime\": \"09:00:00\",\n    \"durationMinutes\": 120,\n    \"startDate\": \"2026-11-02\",\n    \"endDate\": \"2026-11-06\"\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "4. Pay for Booking (Idempotent UPI Payment)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "idem-upi-booking-001" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/v1/payments", "host": ["{{baseUrl}}"], "path": ["api", "v1", "payments"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{bookingId}}\",\n  \"paymentMethod\": \"UPI\",\n  \"instrumentDetails\": \"customer@okicici\"\n}"
+        }
+      }
+    },
+    {
+      "name": "5. Cancel Single Occurrence of Recurring Series",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/occurrences/{{occurrenceId}}/cancel",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "bookings", "{{bookingId}}", "occurrences", "{{occurrenceId}}", "cancel"]
+        }
+      }
+    },
+    {
+      "name": "6. Cancel Entire Booking Series",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/bookings/{{bookingId}}/cancel",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "bookings", "{{bookingId}}", "cancel"]
+        }
+      }
+    }
+  ]
+}
