@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run MaidBookingApplication (In-Memory Profile)",
+      "request": "launch",
+      "mainClass": "com.rupeek.maidbooking.MaidBookingApplication",
+      "projectName": "maid-booking-system",
+      "args": "--spring.profiles.active=in-memory"
+    },
+    {
+      "type": "java",
+      "name": "Run MaidBookingApplication (PostgreSQL Docker Profile)",
+      "request": "launch",
+      "mainClass": "com.rupeek.maidbooking.MaidBookingApplication",
+      "projectName": "maid-booking-system",
+      "args": "--spring.profiles.active=postgres"
+    }
+  ]
+}
