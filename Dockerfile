@@ -1,10 +1,14 @@
+
 # ============================================================================
-# Stage 1: Build Stage (Java 17 + Maven)
+# Stage 1: Build Stage
 # ============================================================================
-FROM eclipse-temurin:17-jdk-alpine AS builder
+FROM eclipse-temurin:17-jdk AS builder
+
 WORKDIR /workspace/app
 
-RUN apk add --no-cache maven
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends maven \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
@@ -13,15 +17,20 @@ COPY src src
 RUN mvn clean package -DskipTests -B
 
 # ============================================================================
-# Stage 2: Production Runtime Stage (Minimal JRE 17, Non-Root User)
+# Stage 2: Production Runtime
 # ============================================================================
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
+
 WORKDIR /app
 
-RUN addgroup -S spring && adduser -S spring -G spring
-USER spring:spring
+RUN groupadd --system spring \
+    && useradd --system --gid spring spring
 
 COPY --from=builder /workspace/app/target/*.jar app.jar
+
+RUN chown spring:spring app.jar
+
+USER spring:spring
 
 EXPOSE 8080
 
