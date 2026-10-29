@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: maid-booking-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: maid_booking_db
+      POSTGRES_USER: rupeek_admin
+      POSTGRES_PASSWORD: rupeek_secret_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/main/resources/db/migration/V1__init_schema.sql:/docker-entrypoint-initdb.d/01_init_schema.sql:ro
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=16MB
+      -c lock_timeout=3000ms
+      -c statement_timeout=10000ms
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rupeek_admin -d maid_booking_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  maid-booking-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: maid-booking-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/maid_booking_db
+      SPRING_DATASOURCE_USERNAME: rupeek_admin
+      SPRING_DATASOURCE_PASSWORD: rupeek_secret_password
+      HIKARI_MAXIMUM_POOL_SIZE: 25
+      HIKARI_MINIMUM_IDLE: 10
+      HIKARI_CONNECTION_TIMEOUT_MS: 2000
+
+volumes:
+  postgres_data:

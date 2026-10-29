@@ -1,0 +1,494 @@
+openapi: 3.0.3
+info:
+  title: Rupeek Maid Booking Platform API Contract
+  version: 1.0.0
+  description: |
+    Production API Contract for the Frontend Engineering Team.
+    Supports Maid Onboarding, Multi-Filter Discovery, Instant/Scheduled/Recurring Bookings,
+    Idempotent Payments (UPI, Card, Wallet), and Full/Single-Occurrence Cancellations.
+servers:
+  - url: http://localhost:8080
+    description: Local Docker / Spring Boot Server
+paths:
+  /api/v1/maids:
+    post:
+      tags: [Maids & Discovery]
+      summary: Onboard a new maid with skills, pricing, and availability windows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMaidRequest'
+      responses:
+        '201':
+          description: Maid onboarded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaidResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /api/v1/maids/{maidId}:
+    get:
+      tags: [Maids & Discovery]
+      summary: Get maid profile by ID
+      parameters:
+        - in: path
+          name: maidId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Maid profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaidResponse'
+        '404':
+          description: Maid not found
+
+  /api/v1/maids/search:
+    post:
+      tags: [Maids & Discovery]
+      summary: Discover available maids by locality, skill, slot, rating, price, and gender
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaidSearchRequest'
+      responses:
+        '200':
+          description: Ranked list of available maids
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MaidResponse'
+
+  /api/v1/bookings:
+    post:
+      tags: [Bookings & Cancellations]
+      summary: Create an INSTANT, SCHEDULED, or RECURRING booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          description: Booking created in PENDING_PAYMENT state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+        '409':
+          description: Slot conflict (maid already booked for overlapping slot)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+
+  /api/v1/bookings/{bookingId}:
+    get:
+      tags: [Bookings & Cancellations]
+      summary: Get booking details and occurrence breakdown
+      parameters:
+        - in: path
+          name: bookingId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Booking details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResponse'
+
+  /api/v1/bookings/{bookingId}/cancel:
+    post:
+      tags: [Bookings & Cancellations]
+      summary: Cancel entire booking or recurring series
+      parameters:
+        - in: path
+          name: bookingId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Booking cancelled and slot(s) freed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationResponse'
+        '422':
+          description: Invalid state transition
+
+  /api/v1/bookings/{bookingId}/occurrences/{occurrenceId}/cancel:
+    post:
+      tags: [Bookings & Cancellations]
+      summary: Cancel a single occurrence of a recurring booking
+      parameters:
+        - in: path
+          name: bookingId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: occurrenceId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Single occurrence cancelled and slot freed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationResponse'
+
+  /api/v1/payments:
+    post:
+      tags: [Payments]
+      summary: Process idempotent payment for a full booking or single occurrence
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+          description: Unique UUID/string per payment attempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '200':
+          description: Payment processed (or replayed idempotently)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+
+components:
+  schemas:
+    AvailabilityWindowDto:
+      type: object
+      required: [dayOfWeek, startTime, endTime]
+      properties:
+        dayOfWeek:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        startTime:
+          type: string
+          example: "08:00:00"
+        endTime:
+          type: string
+          example: "20:00:00"
+
+    CreateMaidRequest:
+      type: object
+      required: [name, gender, locality, city, skills, baseHourlyRate, rating, availabilityWindows]
+      properties:
+        name:
+          type: string
+          example: "Lakshmi Devi"
+        gender:
+          type: string
+          enum: [FEMALE, MALE, OTHER]
+        locality:
+          type: string
+          example: "Indiranagar"
+        city:
+          type: string
+          example: "Bengaluru"
+        pincode:
+          type: string
+          example: "560038"
+        latitude:
+          type: number
+          example: 12.9784
+        longitude:
+          type: number
+          example: 77.6408
+        skills:
+          type: array
+          items:
+            type: string
+            enum: [CLEANING, COOKING, DISHWASHING, LAUNDRY, BABYSITTING, ELDER_CARE]
+        baseHourlyRate:
+          type: number
+          example: 250.00
+        rating:
+          type: number
+          example: 4.8
+        availabilityWindows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailabilityWindowDto'
+
+    MaidResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        gender:
+          type: string
+        locality:
+          type: string
+        city:
+          type: string
+        pincode:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        baseHourlyRate:
+          type: number
+        rating:
+          type: number
+        availabilityWindows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailabilityWindowDto'
+        active:
+          type: boolean
+
+    MaidSearchRequest:
+      type: object
+      required: [startTime, endTime]
+      properties:
+        locality:
+          type: string
+          example: "Indiranagar"
+        requiredSkill:
+          type: string
+          enum: [CLEANING, COOKING, DISHWASHING, LAUNDRY, BABYSITTING, ELDER_CARE]
+        startTime:
+          type: string
+          format: date-time
+          example: "2026-11-02T09:00:00"
+        endTime:
+          type: string
+          format: date-time
+          example: "2026-11-02T11:00:00"
+        minRating:
+          type: number
+          example: 4.5
+        maxHourlyRate:
+          type: number
+          example: 300.00
+        genderPreference:
+          type: string
+          enum: [FEMALE, MALE, OTHER, ANY]
+
+    RecurrencePatternDto:
+      type: object
+      required: [daysOfWeek, slotStartTime, durationMinutes, startDate, endDate]
+      properties:
+        daysOfWeek:
+          type: array
+          items:
+            type: string
+            enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        slotStartTime:
+          type: string
+          example: "09:00:00"
+        durationMinutes:
+          type: integer
+          example: 120
+        startDate:
+          type: string
+          format: date
+          example: "2026-11-02"
+        endDate:
+          type: string
+          format: date
+          example: "2026-11-06"
+
+    CreateBookingRequest:
+      type: object
+      required: [customerId, maidId, serviceSkill, bookingType]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        maidId:
+          type: string
+          format: uuid
+        serviceSkill:
+          type: string
+          enum: [CLEANING, COOKING, DISHWASHING, LAUNDRY, BABYSITTING, ELDER_CARE]
+        bookingType:
+          type: string
+          enum: [INSTANT, SCHEDULED, RECURRING]
+        instantDurationMinutes:
+          type: integer
+          example: 60
+        scheduledStartTime:
+          type: string
+          format: date-time
+        scheduledEndTime:
+          type: string
+          format: date-time
+        recurrencePattern:
+          $ref: '#/components/schemas/RecurrencePatternDto'
+
+    BookingOccurrenceDto:
+      type: object
+      properties:
+        occurrenceId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [PENDING_PAYMENT, CONFIRMED, CANCELLED, COMPLETED]
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    BookingResponse:
+      type: object
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        maidId:
+          type: string
+          format: uuid
+        serviceSkill:
+          type: string
+        bookingType:
+          type: string
+        status:
+          type: string
+          enum: [PENDING_PAYMENT, CONFIRMED, PARTIALLY_CANCELLED, CANCELLED, COMPLETED]
+        totalAmount:
+          type: number
+        occurrences:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingOccurrenceDto'
+        createdAt:
+          type: string
+          format: date-time
+
+    CreatePaymentRequest:
+      type: object
+      required: [bookingId, paymentMethod, instrumentDetails]
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+        occurrenceId:
+          type: string
+          format: uuid
+          nullable: true
+        paymentMethod:
+          type: string
+          enum: [UPI, CARD, WALLET]
+        instrumentDetails:
+          type: string
+          example: "customer@okicici"
+
+    PaymentResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        bookingId:
+          type: string
+          format: uuid
+        occurrenceId:
+          type: string
+          format: uuid
+          nullable: true
+        paymentMethod:
+          type: string
+        amount:
+          type: number
+        refundedAmount:
+          type: number
+        status:
+          type: string
+          enum: [INITIATED, SUCCESS, FAILED, PARTIALLY_REFUNDED, REFUNDED]
+        idempotencyKey:
+          type: string
+        gatewayReference:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CancellationResponse:
+      type: object
+      properties:
+        bookingId:
+          type: string
+          format: uuid
+        bookingStatus:
+          type: string
+        cancelledOccurrenceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        refundAmount:
+          type: number
+        refundPercentage:
+          type: integer
+        refundPolicyReason:
+          type: string
+        gatewayRefundReference:
+          type: string
+
+    ApiErrorResponse:
+      type: object
+      properties:
+        errorCode:
+          type: string
+          example: "SLOT_ALREADY_BOOKED"
+        message:
+          type: string
+        httpStatus:
+          type: integer
+          example: 409
+        timestamp:
+          type: string
+          format: date-time
